@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+
+
+import codecs
+import json
+import time
+import os
+import re
+import urllib.parse
+import urllib.request
+
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+PREFIX = 'https://mytotalconnectcomfort.com/'
+devices = list()
+
+class Client(object):
+  def __init__(self, username, password):
+    self.username = username
+    self.password = password
+    self.urlopener = urllib.request.build_opener()
+    self.urlopener.addheaders = [('User-Agent', 'TCC-Exporter/0.1')]
+    self.urlopener.add_handler(urllib.request.HTTPCookieProcessor())
+    self.login()
+
+  def login(self):
+    form = {
+      'UserName': self.username,
+      'Password': self.password,
+      'RememberMe': 'False'
+    }
+    headers = {
+      'Origin': PREFIX + 'portal',
+    }
+    data = urllib.parse.urlencode(form).encode('utf-8')
+    request = urllib.request.Request(PREFIX + 'portal', data, headers)
+    self.urlopener.open(PREFIX + 'portal')  # get signin cookie
+    data = self.urlopener.open(request)  # actually sign in
+    if '/portal/Account/LogOff' in data.read().decode():
+      # successful login
+      pass
+    else:
+      raise ValueError("Invalid credentials")
+
+  def _request(self, path, data={}, headers={}):
+    if isinstance(data, str):
+      data = data.encode('utf-8')
+    elif isinstance(data, bytes):
+      data = data
+    elif data != {}:
+      data = json.dumps(data).encode('utf-8')
+    else:
+      data = None
+    headers = dict(headers)
+    headers['X-Requested-With'] = 'XMLHttpRequest'
+    headers['Accept'] = 'application/json, text/javascript'
+    if data != None:
+      headers['Content-Type'] = 'application/json; charset=utf-8'
+    request = urllib.request.Request(PREFIX + path, data, headers)
+    return self.urlopener.open(request)  # actually fetch
+
+  def _request_data(self, path, data={}, headers={}):
+    data = self._request(path, data, headers)
+    reader = codecs.getreader(data.headers.get_content_charset())
+    return reader(data)
+
+  def locations(self):
+    path = 'portal/Location/GetLocationListData?page=1&filter='
+    data = self._request_data(path, '')
+    return json.load(data)
+    
+  def location_overview(self, locationId):
+    path = 'portal/Device/GetZoneListData?locationId=%s&page=1' % (locationId,)
+    data = self._request_data(path, '')
+    return json.load(data)
+
+  def device_status(self, device_id):
+    utc_seconds = time.mktime(time.gmtime())
+    path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
+    data = self._request_data(path)
+    return json.load(data)
+
+
+class Server(BaseHTTPRequestHandler):
+  def do_GET(self):
+    self.send_response(200)
+    self.send_header('Content-type','text/html')
+    self.end_headers()
+    for device in devices:
+      self.wfile.write(do_stuff(device, device['DeviceID'], client.device_status(device['DeviceID'])).encode('utf-8'))
+    return
+
+
+def case_convert(name):
+  string = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+  return re.sub('([a-z0-9])([A-Z])', r'\1_\2', string).lower()
+
+
+def device_info(device):
+  retval = str()
+  for key in device:
+    if retval:
+      retval = retval + ","
+    retval = retval + case_convert(key) + '="' + str(device[key]) + '"'
+  return retval
+
+
+def do_stuff(device, name, obj):
+  retval = str()
+  if isinstance(obj, dict):
+    for each in obj:
+      retval = retval + do_stuff(device, each, obj[each])
+  if isinstance(obj, (int, bool)):
+    if name not in device:
+      retval = retval + str("# HELP tcc_" + case_convert(name) + " Total_Control_Comfort value "+ name + "\n")
+      retval = retval + str("# TYPE tcc_" + case_convert(name) + " gauge\n")
+      retval = retval + str("tcc_" + case_convert(name) + "{" + device_info(device) + "} " + str(int(obj)) + "\n")
+  return retval
+  
+
+def notmain():
+  httpd = HTTPServer(('', int(os.environ.get('EXPORTER_PORT'))), Server)
+  httpd.serve_forever()
+
+
+def main():
+  global client, devices 
+  client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
+  pp = lambda data: json.dumps(data, sort_keys=True,indent=4,separators=(',', ': '))
+  #print(pp(client.locations()))
+  #print(pp(client.location_overview(2914166)))
+  #print(pp(client.device_status(3766856)))
+
+  for location in client.locations():
+    for device in location['Devices']:
+      devices.append({ "DeviceID": device['DeviceID'], "LocationID": device['LocationID'], "MacID": device['MacID'], "Name": device['Name'] })
+
+  #for device in devices:
+  #  print(do_stuff(device, device['DeviceID'], client.device_status(device['DeviceID'])))
+
+  httpd = HTTPServer(('', int(os.environ.get('EXPORTER_PORT'))), Server)
+  httpd.serve_forever()
+
+
+if __name__ == '__main__':
+  main()
+
