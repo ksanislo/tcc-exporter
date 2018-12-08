@@ -7,6 +7,6 @@ Usage:
 
 Avaliable from the docker hub:
 
-docker run -t -e TCC_USERNAME=<email> -e TCC_PASSWORD=<password> -e EXPORTER_PORT=9101 -p 9101:9101 ksanislo/tcc-exporter
+docker run -t -e TCC_USERNAME=\<email\> -e TCC_PASSWORD=\<password\> -e EXPORTER_PORT=9101 -p 9101:9101 ksanislo/tcc-exporter
 
 The http server will answer any request with prometheus "/metrics", so be sure to restrict access as needed.
