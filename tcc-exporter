@@ -118,11 +118,6 @@ def do_stuff(device, name, obj):
   return retval
   
 
-def notmain():
-  httpd = HTTPServer(('', int(os.environ.get('EXPORTER_PORT'))), Server)
-  httpd.serve_forever()
-
-
 def main():
   global client, devices 
   client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
