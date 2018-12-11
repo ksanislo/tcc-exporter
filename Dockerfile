@@ -5,6 +5,6 @@ WORKDIR /usr/src/tcc-exporter
 RUN pip install dumb-init
 COPY --chown=tcc-exporter:tcc-exporter . /usr/src/tcc-exporter/
 EXPOSE 9101
-ENV TCC_USERNAME=<username> TCC_PASSWORD=<password> EXPORTER_PORT=9101
+ENV TCC_USERNAME=<username> TCC_PASSWORD=<password> TCC_EXPORTER_PORT=9101
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["python", "./tcc-exporter"]

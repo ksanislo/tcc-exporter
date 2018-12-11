@@ -38,6 +38,7 @@ class Client(object):
     data = self.urlopener.open(request)  # actually sign in
     if '/portal/Account/LogOff' in data.read().decode():
       # successful login
+      print("TCC API login successful.")
       pass
     else:
       raise ValueError("Invalid credentials")
@@ -56,7 +57,15 @@ class Client(object):
     headers['Accept'] = 'application/json, text/javascript'
     if data != None:
       headers['Content-Type'] = 'application/json; charset=utf-8'
-    request = urllib.request.Request(PREFIX + path, data, headers)
+    try:
+      request = urllib.request.Request(PREFIX + path, data, headers)
+    except HTTPError as e:
+        print('TCC API returned: ', e.code, ':', e.reason)
+        if (e.code == 401):
+            print('Retrying Client.login()')
+            self.login()
+    except URLError as e:
+        print('Reason: ', e.reason)
     return self.urlopener.open(request)  # actually fetch
 
   def _request_data(self, path, data={}, headers={}):
@@ -133,7 +142,7 @@ def main():
   #for device in devices:
   #  print(do_stuff(device, device['DeviceID'], client.device_status(device['DeviceID'])))
 
-  httpd = HTTPServer(('', int(os.environ.get('EXPORTER_PORT'))), Server)
+  httpd = HTTPServer(('', int(os.environ.get('TCC_EXPORTER_PORT'))), Server)
   httpd.serve_forever()
 
 

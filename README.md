@@ -8,7 +8,7 @@ Avaliable from the docker hub:
 docker run -t \
     -e TCC_USERNAME=\<email\> \
     -e TCC_PASSWORD=\<password\> \
-    -e EXPORTER_PORT=9101 \
+    -e TCC_EXPORTER_PORT=9101 \
     -p 9101:9101 \
     ksanislo/tcc-exporter
 
