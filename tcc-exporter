@@ -62,14 +62,14 @@ class Client(object):
     try:
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-      print('TCC API returned: ', e.code, ':', e.reason)
+      print('TCC API status:', e.code, '-', e.reason)
       if (e.code == 401):
         print('Retrying Client.login()')
         self.login()
         return self._request(path, data, headers)
       return e.code
     except URLError as e:
-      print('Reason: ', e.reason)
+      print('TCC API failure:', e.reason)
       return None
 
   def _request_data(self, path, data={}, headers={}):
