@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.request
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.error import URLError, HTTPError
 
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
@@ -57,16 +58,18 @@ class Client(object):
     headers['Accept'] = 'application/json, text/javascript'
     if data != None:
       headers['Content-Type'] = 'application/json; charset=utf-8'
+    request = urllib.request.Request(PREFIX + path, data, headers)
     try:
-      request = urllib.request.Request(PREFIX + path, data, headers)
+      return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-        print('TCC API returned: ', e.code, ':', e.reason)
-        if (e.code == 401):
-            print('Retrying Client.login()')
-            self.login()
+      print('TCC API returned: ', e.code, ':', e.reason)
+      if (e.code == 401):
+        print('Retrying Client.login()')
+        self.login()
+        return self._request(path, data, headers)
     except URLError as e:
-        print('Reason: ', e.reason)
-    return self.urlopener.open(request)  # actually fetch
+      print('Reason: ', e.reason)
+      return None
 
   def _request_data(self, path, data={}, headers={}):
     data = self._request(path, data, headers)
