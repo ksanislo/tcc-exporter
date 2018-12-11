@@ -67,39 +67,59 @@ class Client(object):
         print('Retrying Client.login()')
         self.login()
         return self._request(path, data, headers)
+      return e.code
     except URLError as e:
       print('Reason: ', e.reason)
       return None
 
   def _request_data(self, path, data={}, headers={}):
     data = self._request(path, data, headers)
+    if data is None or isinstance(data, int):
+      return data
     reader = codecs.getreader(data.headers.get_content_charset())
     return reader(data)
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
     data = self._request_data(path, '')
+    if data is None or isinstance(data, int):
+      return data
     return json.load(data)
     
   def location_overview(self, locationId):
     path = 'portal/Device/GetZoneListData?locationId=%s&page=1' % (locationId,)
     data = self._request_data(path, '')
+    if data is None or isinstance(data, int):
+      return data
     return json.load(data)
 
   def device_status(self, device_id):
     utc_seconds = time.mktime(time.gmtime())
     path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
     data = self._request_data(path)
+    if data is None or isinstance(data, int):
+      return data
     return json.load(data)
 
 
 class Server(BaseHTTPRequestHandler):
   def do_GET(self):
-    self.send_response(200)
+    results = bytes()
+    for device in devices:
+      data = client.device_status(device['DeviceID'])
+      if isinstance(data, dict):
+        results = results + do_stuff(device, device['DeviceID'], data).encode('utf-8')
+    if results:
+      self.send_response(200)
+    else:
+      if isinstance(data, int):
+        self.send_response(data)
+      else:
+        self.send_response(500)
     self.send_header('Content-type','text/html')
     self.end_headers()
-    for device in devices:
-      self.wfile.write(do_stuff(device, device['DeviceID'], client.device_status(device['DeviceID'])).encode('utf-8'))
+    if results:
+      self.wfile.write(results)
     return
 
 
@@ -133,17 +153,10 @@ def do_stuff(device, name, obj):
 def main():
   global client, devices 
   client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
-  pp = lambda data: json.dumps(data, sort_keys=True,indent=4,separators=(',', ': '))
-  #print(pp(client.locations()))
-  #print(pp(client.location_overview(2914166)))
-  #print(pp(client.device_status(3766856)))
 
   for location in client.locations():
     for device in location['Devices']:
       devices.append({ "DeviceID": device['DeviceID'], "LocationID": device['LocationID'], "MacID": device['MacID'], "Name": device['Name'] })
-
-  #for device in devices:
-  #  print(do_stuff(device, device['DeviceID'], client.device_status(device['DeviceID'])))
 
   httpd = HTTPServer(('', int(os.environ.get('TCC_EXPORTER_PORT'))), Server)
   httpd.serve_forever()
