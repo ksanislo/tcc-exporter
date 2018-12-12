@@ -97,9 +97,13 @@ class Client(object):
     utc_seconds = time.mktime(time.gmtime())
     path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
     data = self._request_data(path)
-    if data is None or isinstance(data, int):
+    if isinstance(data, int):
       return data
-    return json.load(data)
+    try:
+      return json.load(data)
+    except:
+      print('TCC API returned invalid data.')
+      return None
 
 
 class Server(BaseHTTPRequestHandler):
