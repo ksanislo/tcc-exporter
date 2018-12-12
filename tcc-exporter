@@ -98,6 +98,13 @@ class Client(object):
     path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
     data = self._request_data(path)
     if isinstance(data, int):
+      if (data == 401): # Login failure, lets try to login again.
+        print('Retrying Client.login()')
+        self.login()
+        data = self._request_data(path)
+        if isinstance(data, int):
+          return data # Another failure, just return the code.
+        return self._request_data(path)
       return data
     try:
       return json.load(data)
