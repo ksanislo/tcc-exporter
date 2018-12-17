@@ -15,6 +15,12 @@ PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
 class Client(object):
+  _backoff = 0
+  _last_login = 0
+  _min_backoff = 15
+  _max_backoff = 300
+
+
   def __init__(self, username, password):
     self.username = username
     self.password = password
@@ -32,14 +38,31 @@ class Client(object):
     headers = {
       'Origin': PREFIX + 'portal',
     }
-    data = urllib.parse.urlencode(form).encode('utf-8')
-    request = urllib.request.Request(PREFIX + 'portal', data, headers)
-    self.urlopener.open(PREFIX + 'portal')  # get signin cookie
-    data = self.urlopener.open(request)  # actually sign in
-    if '/portal/Account/LogOff' in data.read().decode():
-      print("TCC API login successful.")
+    utc_seconds = time.mktime(time.gmtime())
+    if (self._last_login + self._backoff < utc_seconds):
+      self._last_login = time.mktime(time.gmtime())
+      data = urllib.parse.urlencode(form).encode('utf-8')
+      request = urllib.request.Request(PREFIX + 'portal', data, headers)
+      self.urlopener.open(PREFIX + 'portal')  # get signin cookie
+      try:
+        data = self.urlopener.open(request)  # actually sign in
+        decoded = data.read().decode()
+        if '/portal/Account/LogOff' in decoded:
+          print("TCC API login successful.")
+          self._backoff = 0
+        else:
+          print(decoded)
+          raise ValueError("TCC API login failed.")
+      except Exception as e:
+        print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
+        if (self._backoff < self._min_backoff):
+          self._backoff = self._min_backoff
+        elif (self._backoff * 2 > self._max_backoff):
+          self._backoff = self._max_backoff
+        else:
+          self._backoff = self._backoff * 2
     else:
-      print("TCC API login failed.")
+      print("Backoff in effect, delaying login() another {0} seconds".format(self._last_login + self._backoff - utc_seconds))
 
   def _request(self, path, data={}, headers={}):
     if isinstance(data, str):
