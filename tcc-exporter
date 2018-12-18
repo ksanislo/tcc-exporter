@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.error import URLError, HTTPError
+from urllib.error import HTTPError
 
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
@@ -84,8 +84,8 @@ class Client(object):
     except HTTPError as e:
       print('TCC API status:', e.code, '-', e.reason)
       return e.code
-    except URLError as e:
-      print('TCC API failure:', e.reason)
+    except Exception as e:
+      print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
       return None
 
   def _request_data(self, path, data={}, headers={}):
@@ -124,8 +124,8 @@ class Client(object):
       return data
     try:
       return json.load(data)
-    except:
-      print('TCC API returned invalid data.')
+    except Exception as e:
+      print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
       return None
 
 
