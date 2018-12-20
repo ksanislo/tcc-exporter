@@ -135,7 +135,7 @@ class Client(object):
 class Server(BaseHTTPRequestHandler):
   # Simplified logging
   def log_message(self, format, *args):
-    print('%s\n' % format%args)
+    print(format % args)
 
   def do_GET(self):
     results = bytes()
