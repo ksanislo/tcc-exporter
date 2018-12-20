@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.5.2'
+VERSION = '0.5.3'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -49,21 +49,23 @@ class Client(object):
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
-          print("TCC API login successful.")
+          print('TCC API login successful.')
           self._backoff = 0
         else:
           print(decoded)
-          raise ValueError("TCC API login failed.")
-      except Exception as e:
-        print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
+          raise ValueError('login_failure')
+      except ValueError:
         if (self._backoff < self._min_backoff):
           self._backoff = self._min_backoff
         elif (self._backoff * 2 > self._max_backoff):
           self._backoff = self._max_backoff
         else:
           self._backoff = self._backoff * 2
+        print('TCC login failed. Setting backoff to {0} seconds.'.format(self._backoff))
+      except Exception as e:
+        print('{0}: {1!r}'.format(type(e).__name__, e.args))
     else:
-      print("Backoff in effect, delaying login() another {0} seconds".format(self._last_login + self._backoff - utc_seconds))
+      print('Backoff in effect, login() delayed another {0} seconds'.format(self._last_login + self._backoff - utc_seconds))
 
   def _request(self, path, data={}, headers={}):
     if isinstance(data, str):
@@ -86,7 +88,7 @@ class Client(object):
       print('TCC API status:', e.code, '-', e.reason)
       return e.code
     except Exception as e:
-      print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
+      print('{0}: {1!r}'.format(type(e).__name__, e.args))
       return None
 
   def _request_data(self, path, data={}, headers={}):
@@ -126,11 +128,15 @@ class Client(object):
     try:
       return json.load(data)
     except Exception as e:
-      print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
+      print('{0}: {1!r}'.format(type(e).__name__, e.args))
       return None
 
 
 class Server(BaseHTTPRequestHandler):
+  # Simplified logging
+  def log_message(self, format, *args):
+    print('%s\n' % format%args)
+
   def do_GET(self):
     results = bytes()
     for device in devices:
@@ -150,7 +156,7 @@ class Server(BaseHTTPRequestHandler):
       try:
         self.wfile.write(results)
       except Exception as e:
-        print("An exception of type {0} occurred. Arguments: {1!r}".format(type(e).__name__, e.args))
+        print('{0}: {1!r}'.format(type(e).__name__, e.args))
     return
 
 
@@ -163,7 +169,7 @@ def device_info(device):
   retval = str()
   for key in device:
     if retval:
-      retval = retval + ","
+      retval = retval + ','
     retval = retval + case_convert(key) + '="' + str(device[key]) + '"'
   return retval
 
@@ -175,9 +181,9 @@ def do_stuff(device, name, obj):
       retval = retval + do_stuff(device, each, obj[each])
   if isinstance(obj, (int, bool)):
     if name not in device:
-      retval = retval + str("# HELP tcc_" + case_convert(name) + " Total_Control_Comfort value "+ name + "\n")
-      retval = retval + str("# TYPE tcc_" + case_convert(name) + " gauge\n")
-      retval = retval + str("tcc_" + case_convert(name) + "{" + device_info(device) + "} " + str(int(obj)) + "\n")
+      retval = retval + '# HELP tcc_{0} Total_Control_Comfort value {1}\n'.format(case_convert(name), name)
+      retval = retval + '# TYPE tcc_{0} gauge\n'.format(case_convert(name))
+      retval = retval + 'tcc_{0}{{{1}}} {2}\n'.format(case_convert(name), device_info(device), int(obj))
   return retval
   
 
@@ -187,13 +193,13 @@ def main():
 
   for location in client.locations():
     for device in location['Devices']:
-      devices.append({ "DeviceID": device['DeviceID'], "LocationID": device['LocationID'], "MacID": device['MacID'], "Name": device['Name'] })
+      devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
 
   httpd = HTTPServer(('', int(os.environ.get('TCC_EXPORTER_PORT'))), Server)
   httpd.serve_forever()
 
 
 if __name__ == '__main__':
-  print('Starting tcc-exporter/'+VERSION)
+  print('Started tcc-exporter/'+VERSION)
   main()
 
