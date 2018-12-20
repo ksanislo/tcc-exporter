@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.5.1'
+VERSION = '0.5.2'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -26,7 +26,7 @@ class Client(object):
     self.username = username
     self.password = password
     self.urlopener = urllib.request.build_opener()
-    self.urlopener.addheaders = [('User-Agent', 'TCC-Exporter/'+VERSION)]
+    self.urlopener.addheaders = [('User-Agent', 'tcc-exporter/'+VERSION)]
     self.urlopener.add_handler(urllib.request.HTTPCookieProcessor())
     self.login()
 
@@ -194,5 +194,6 @@ def main():
 
 
 if __name__ == '__main__':
+  print('Starting tcc-exporter/'+VERSION)
   main()
 
