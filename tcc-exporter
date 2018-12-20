@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.5.3'
+VERSION = '0.5.4'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
