@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.5.4'
+VERSION = '0.6.0'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -20,7 +20,6 @@ class Client(object):
   _last_login = 0
   _min_backoff = 15
   _max_backoff = 300
-
 
   def __init__(self, username, password):
     self.username = username
@@ -49,10 +48,10 @@ class Client(object):
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
-          print('TCC API login successful.')
+          print('TCC API login success.')
           self._backoff = 0
         else:
-          print(decoded)
+          print('TCC API login failure.')
           raise ValueError('login_failure')
       except ValueError:
         if (self._backoff < self._min_backoff):
@@ -61,11 +60,11 @@ class Client(object):
           self._backoff = self._max_backoff
         else:
           self._backoff = self._backoff * 2
-        print('TCC login failed. Setting backoff to {0} seconds.'.format(self._backoff))
+        print('Setting backoff to {0} seconds.'.format(self._backoff))
       except Exception as e:
         print('{0}: {1!r}'.format(type(e).__name__, e.args))
     else:
-      print('Backoff in effect, login() delayed another {0} seconds'.format(self._last_login + self._backoff - utc_seconds))
+      print('Backoff in effect, login() delayed another {0} seconds.'.format(self._last_login + self._backoff - utc_seconds))
 
   def _request(self, path, data={}, headers={}):
     if isinstance(data, str):
@@ -93,43 +92,37 @@ class Client(object):
 
   def _request_data(self, path, data={}, headers={}):
     data = self._request(path, data, headers)
+    if isinstance(data, int) and (data == 401): # Login failure, lets try to login again.
+      print('Retrying Client.login()')
+      self.login()
+      data = self._request(path, data, headers)
     if data is None or isinstance(data, int):
-      return data
+      return data # Another failure, just return the code.
     reader = codecs.getreader(data.headers.get_content_charset())
-    return reader(data)
+    try:
+      return json.load(reader(data))
+    except json.JSONDecodeError as e:
+      print('TCC API returned invalid data.')
+    except Exception as e:
+      print('{0}: {1!r}'.format(type(e).__name__, e.args))
+      return None
+
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
     data = self._request_data(path, '')
-    if data is None or isinstance(data, int):
-      return data
-    return json.load(data)
+    return data
     
   def location_overview(self, locationId):
     path = 'portal/Device/GetZoneListData?locationId=%s&page=1' % (locationId,)
     data = self._request_data(path, '')
-    if data is None or isinstance(data, int):
-      return data
-    return json.load(data)
+    return data
 
   def device_status(self, device_id):
     utc_seconds = time.mktime(time.gmtime())
     path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
     data = self._request_data(path)
-    if isinstance(data, int):
-      if (data == 401): # Login failure, lets try to login again.
-        print('Retrying Client.login()')
-        self.login()
-        data = self._request_data(path)
-        if isinstance(data, int):
-          return data # Another failure, just return the code.
-        return self._request_data(path)
-      return data
-    try:
-      return json.load(data)
-    except Exception as e:
-      print('{0}: {1!r}'.format(type(e).__name__, e.args))
-      return None
+    return data
 
 
 class Server(BaseHTTPRequestHandler):
@@ -155,6 +148,8 @@ class Server(BaseHTTPRequestHandler):
     if results:
       try:
         self.wfile.write(results)
+      except BrokenPipeError as e:
+        print('Prometheus closed the connection.')
       except Exception as e:
         print('{0}: {1!r}'.format(type(e).__name__, e.args))
     return
