@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.7.1'
+VERSION = '0.7.2'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -90,7 +90,7 @@ class Client(object):
     try:
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-      log(INFO, 'TCC API status:', e.code, '-', e.reason)
+      log(INFO, 'TCC API status: {0} - {1}'.format(e.code, e.reason))
       return e.code
     except Exception as e:
       log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
