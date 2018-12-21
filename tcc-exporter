@@ -11,9 +11,15 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.6.0'
+VERSION = '0.7.0'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
+
+# Log levels. TCC_LOGLEVEL
+WARN = 0
+INFO = 1
+DBUG = 2
+
 
 class Client(object):
   _backoff = 0
@@ -48,10 +54,10 @@ class Client(object):
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
-          print('TCC API login success.')
+          log(INFO, 'TCC API login success.')
           self._backoff = 0
         else:
-          print('TCC API login failure.')
+          log(INFO, 'TCC API login failure.')
           raise ValueError('login_failure')
       except ValueError:
         if (self._backoff < self._min_backoff):
@@ -60,11 +66,11 @@ class Client(object):
           self._backoff = self._max_backoff
         else:
           self._backoff = self._backoff * 2
-        print('Setting backoff to {0} seconds.'.format(self._backoff))
+        log(INFO, 'Setting backoff to {0} seconds.'.format(self._backoff))
       except Exception as e:
-        print('{0}: {1!r}'.format(type(e).__name__, e.args))
+        log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
     else:
-      print('Backoff in effect, login() delayed another {0} seconds.'.format(self._last_login + self._backoff - utc_seconds))
+      log(INFO, 'Backoff in effect, login() delayed another {0} seconds.'.format(self._last_login + self._backoff - utc_seconds))
 
   def _request(self, path, data={}, headers={}):
     if isinstance(data, str):
@@ -84,16 +90,16 @@ class Client(object):
     try:
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-      print('TCC API status:', e.code, '-', e.reason)
+      log(INFO, 'TCC API status:', e.code, '-', e.reason)
       return e.code
     except Exception as e:
-      print('{0}: {1!r}'.format(type(e).__name__, e.args))
+      log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
       return None
 
   def _request_data(self, path, data={}, headers={}):
     data = self._request(path, data, headers)
     if isinstance(data, int) and (data == 401): # Login failure, lets try to login again.
-      print('Retrying Client.login()')
+      log(INFO, 'Retrying Client.login()')
       self.login()
       data = self._request(path, data, headers)
     if data is None or isinstance(data, int):
@@ -102,11 +108,10 @@ class Client(object):
     try:
       return json.load(reader(data))
     except json.JSONDecodeError as e:
-      print('TCC API returned invalid data.')
+      log(INFO, 'TCC API returned invalid data.')
     except Exception as e:
-      print('{0}: {1!r}'.format(type(e).__name__, e.args))
+      log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
       return None
-
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
@@ -128,7 +133,7 @@ class Client(object):
 class Server(BaseHTTPRequestHandler):
   # Simplified logging
   def log_message(self, format, *args):
-    print(format % args)
+    log(DBUG, format % args)
 
   def do_GET(self):
     results = bytes()
@@ -149,9 +154,9 @@ class Server(BaseHTTPRequestHandler):
       try:
         self.wfile.write(results)
       except BrokenPipeError as e:
-        print('Prometheus closed the connection.')
+        log(WARN, 'Prometheus closed the connection.')
       except Exception as e:
-        print('{0}: {1!r}'.format(type(e).__name__, e.args))
+        log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
     return
 
 
@@ -182,6 +187,12 @@ def do_stuff(device, name, obj):
   return retval
   
 
+def log(level, *message):
+  debug_level = int(os.environ.get('TCC_LOGLEVEL'))
+  if (level <= debug_level):
+    print(" ".join(message))
+
+
 def main():
   global client, devices 
   client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
@@ -195,6 +206,6 @@ def main():
 
 
 if __name__ == '__main__':
-  print('Started tcc-exporter/'+VERSION)
+  log(INFO, 'Started tcc-exporter/'+VERSION)
   main()
 
