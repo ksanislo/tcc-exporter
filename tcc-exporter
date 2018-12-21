@@ -11,7 +11,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.7.0'
+VERSION = '0.7.1'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -154,7 +154,7 @@ class Server(BaseHTTPRequestHandler):
       try:
         self.wfile.write(results)
       except BrokenPipeError as e:
-        log(WARN, 'Prometheus closed the connection.')
+        log(DBUG, 'Prometheus closed the connection.')
       except Exception as e:
         log(WARN, '{0}: {1!r}'.format(type(e).__name__, e.args))
     return
