@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.0'
+VERSION = '0.8.1'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -52,10 +52,10 @@ class Client(object):
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
-          log('INFO', 'TCC API login success.')
+          log('INFO', 'TCC portal login success.')
           self._backoff = 0
         else:
-          log('INFO', 'TCC API login failure.')
+          log('INFO', 'TCC portal login failure.')
           raise ValueError('login_failure')
       except ValueError:
         if (self._backoff < self._min_backoff):
@@ -88,7 +88,7 @@ class Client(object):
     try:
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-      log('INFO', 'TCC API status: {0} - {1}'.format(e.code, e.reason))
+      log('INFO', 'TCC portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
     except Exception as e:
       log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
@@ -106,7 +106,7 @@ class Client(object):
     try:
       return json.load(reader(data))
     except json.JSONDecodeError as e:
-      log('INFO', 'TCC API returned invalid data.')
+      log('INFO', 'TCC portal returned invalid data.')
     except Exception as e:
       log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
       return None
