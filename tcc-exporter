@@ -12,12 +12,12 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.2'
+VERSION = '0.8.3'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
 # Set your TCC_LOGLEVEL to either the string or index number for your base logging level.
-LOGLEVELS = ['CRITICAL', 'WARNING', 'INFO', 'DEBUG']
+LOGLEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
 
 class Client(object):
   _backoff = 0
@@ -43,7 +43,7 @@ class Client(object):
       'Origin': PREFIX + 'portal',
     }
     utc_seconds = time.mktime(time.gmtime())
-    if (self._last_login + self._backoff < utc_seconds):
+    if (self._last_login + self._backoff <= utc_seconds):
       self._last_login = time.mktime(time.gmtime())
       data = urllib.parse.urlencode(form).encode('utf-8')
       request = urllib.request.Request(PREFIX + 'portal', data, headers)
@@ -55,20 +55,18 @@ class Client(object):
           log('INFO', 'TCC portal login successful.')
           self._backoff = 0
         else:
-          log('INFO', 'TCC portal login failed.')
-          raise ValueError('login_failure')
-      except ValueError:
-        if (self._backoff < self._min_backoff):
-          self._backoff = self._min_backoff
-        elif (self._backoff * 2 > self._max_backoff):
-          self._backoff = self._max_backoff
-        else:
-          self._backoff = self._backoff * 2
-        log('INFO', 'Set login retry delay to {0} seconds.'.format(self._backoff))
+          log('WARNING', 'TCC portal login failed.')
+          if (self._backoff < self._min_backoff):
+            self._backoff = self._min_backoff
+          elif (self._backoff * 2 > self._max_backoff):
+            self._backoff = self._max_backoff
+          else:
+            self._backoff = self._backoff * 2
+          log('INFO', 'Set login retry delay to {0} seconds.'.format(self._backoff))
       except Exception as e:
-        log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+        log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     else:
-      log('INFO', 'Login retry delayed another {0} seconds.'.format(self._last_login + self._backoff - utc_seconds))
+      log('INFO', 'Login retry delayed another {0} seconds.'.format(int(self._last_login + self._backoff - utc_seconds)))
 
   def _request(self, path, data={}, headers={}):
     if isinstance(data, str):
@@ -86,13 +84,14 @@ class Client(object):
       headers['Content-Type'] = 'application/json; charset=utf-8'
     request = urllib.request.Request(PREFIX + path, data, headers)
     try:
+      log('DEBUG', 'Making HTTP request for {0}'.format(PREFIX + path))
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
       log('INFO', 'TCC portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
     except Exception as e:
-      log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
-      return None
+      log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+      return 500
 
   def _request_data(self, path, data={}, headers={}):
     data = self._request(path, data, headers)
@@ -100,16 +99,17 @@ class Client(object):
       log('INFO', 'Retrying Client.login()')
       self.login()
       data = self._request(path, data, headers)
-    if data is None or isinstance(data, int):
+    if isinstance(data, int):
       return data # Another failure, just return the code.
     reader = codecs.getreader(data.headers.get_content_charset())
     try:
       return json.load(reader(data))
     except json.JSONDecodeError as e:
       log('INFO', 'TCC portal returned invalid data.')
+      return 502
     except Exception as e:
-      log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
-      return None
+      log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+      return 500
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
@@ -141,11 +141,10 @@ class Server(BaseHTTPRequestHandler):
         results = results + do_stuff(device, device['DeviceID'], data).encode('utf-8')
     if results:
       self.send_response(200)
+    elif isinstance(data, int):
+      self.send_response(data)
     else:
-      if isinstance(data, int):
-        self.send_response(data)
-      else:
-        self.send_response(500)
+      self.send_response(520) # Cloudflare's "520". No results, no idea why.
     self.send_header('Content-type','text/html')
     self.end_headers()
     if results:
@@ -154,7 +153,7 @@ class Server(BaseHTTPRequestHandler):
       except BrokenPipeError as e:
         log('DEBUG', 'Prometheus closed the connection.')
       except Exception as e:
-        log('WARNING', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+        log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     return
 
 
@@ -199,11 +198,14 @@ def log(level, *message):
 
 
 def main():
-  global client, devices 
+  global client, devices
+  log('DEBUG', 'TCC portal username: {0}'.format(os.environ.get('TCC_USERNAME')))
+  log('DEBUG', 'TCC portal password: {0}'.format(os.environ.get('TCC_PASSWORD')))
   client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
   try:
     for location in client.locations():
       for device in location['Devices']:
+        log('DEBUG', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
         devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
   except TypeError as e:
     log('CRITICAL', 'Failed to collect our list of known locations and devices. Aborting.')
