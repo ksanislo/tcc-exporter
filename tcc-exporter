@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.5'
+VERSION = '0.8.6'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -127,8 +127,8 @@ class Client(object):
     return data
 
   def device_status(self, device_id):
-    utc_seconds = int(time.mktime(time.gmtime()))
-    path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_seconds)
+    utc_milliseconds = int(round(time.time() * 1000))
+    path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_milliseconds)
     data = self._request_data(path)
     return data
 
