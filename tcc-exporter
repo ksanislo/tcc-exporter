@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.7'
+VERSION = '0.8.8'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -47,9 +47,9 @@ class Client(object):
       self._last_login = time.mktime(time.gmtime())
       data = urllib.parse.urlencode(form).encode('utf-8')
       request = urllib.request.Request(PREFIX + 'portal', data, headers)
-      log('DEBUG', 'HTTP GET {0}'.format(PREFIX + 'portal'))
-      self.urlopener.open(PREFIX + 'portal')  # get signin cookie
       try:
+        log('DEBUG', 'HTTP GET {0}'.format(PREFIX + 'portal'))
+        self.urlopener.open(PREFIX + 'portal')  # get signin cookie
         log('DEBUG', 'HTTP POST {0}'.format(PREFIX + 'portal'))
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
