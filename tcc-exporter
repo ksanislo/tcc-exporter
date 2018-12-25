@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.9'
+VERSION = '0.8.10'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -54,11 +54,11 @@ class Client(object):
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
-          log('INFO', 'TCC portal login successful.')
+          log('INFO', 'Portal login successful.')
           self._backoff = 0
           return True
         else:
-          log('WARNING', 'TCC portal login failed.')
+          log('WARNING', 'Portal login failed.')
           if (self._backoff < self._min_backoff):
             self._backoff = self._min_backoff
           elif (self._backoff * 2 > self._max_backoff):
@@ -93,7 +93,7 @@ class Client(object):
       log('DEBUG', 'Remote HTTP GET {0}'.format(PREFIX + path))
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
-      log('INFO', 'TCC portal status: {0} - {1}'.format(e.code, e.reason))
+      log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
     except Exception as e:
       log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
@@ -112,7 +112,7 @@ class Client(object):
       self._backoff = 0 # We got decodable JSON, reset the backoff.
       return retval
     except json.JSONDecodeError as e:
-      log('INFO', 'TCC portal returned invalid data.')
+      log('INFO', 'Portal returned invalid data.')
       return 502
     except Exception as e:
       log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
@@ -138,10 +138,10 @@ class Client(object):
 class Server(BaseHTTPRequestHandler):
   # Simplified logging
   def log_message(self, format, *args):
-    log('DEBUG', 'Finished GET request: {0}'.format(args[1]))
+    log('DEBUG', 'Response status: {0}'.format(args[1]))
 
   def do_GET(self):
-    log('DEBUG', 'Received GET request.')
+    log('DEBUG', 'Handling request: {0}'.format(self.requestline))
     results = bytes()
     for device in devices:
       data = client.device_status(device['DeviceID'])
@@ -207,8 +207,8 @@ def log(level, *message):
 
 def main():
   global client, devices
-  log('DEBUG', 'TCC portal username: {0}'.format(os.environ.get('TCC_USERNAME')))
-  log('DEBUG', 'TCC portal password: {0}'.format(os.environ.get('TCC_PASSWORD')))
+  log('DEBUG', 'Portal username: {0}'.format(os.environ.get('TCC_USERNAME')))
+  log('DEBUG', 'Portal password: {0}'.format(os.environ.get('TCC_PASSWORD')))
   client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
   try:
     for location in client.locations():
