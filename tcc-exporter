@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.11'
+VERSION = '0.8.12'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -221,12 +221,13 @@ def main():
   except Exception as e:
     log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     return
-  httpd = HTTPServer(('', int(os.environ.get('TCC_EXPORTER_PORT'))), Server)
-  log('DEBUG', 'Starting HTTP server on port {0}'.format(os.environ.get('TCC_EXPORTER_PORT')))
+  server_address=('0.0.0.0', int(os.environ.get('TCC_EXPORTER_PORT')))
+  httpd = HTTPServer(server_address, Server)
+  log('DEBUG', 'Starting server: http://{0}:{1}'.format(server_address[0], server_address[1]))
   httpd.serve_forever()
 
 
 if __name__ == '__main__':
-  log('INFO', 'Started tcc-exporter/'+VERSION)
+  log('INFO', 'tcc-exporter/{0}'.format(VERSION))
   main()
 
