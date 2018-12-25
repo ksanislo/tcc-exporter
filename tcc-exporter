@@ -12,7 +12,7 @@ import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.10'
+VERSION = '0.8.11'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 devices = list()
 
@@ -48,9 +48,9 @@ class Client(object):
       data = urllib.parse.urlencode(form).encode('utf-8')
       request = urllib.request.Request(PREFIX + 'portal', data, headers)
       try:
-        log('DEBUG', 'Remote HTTP GET {0}'.format(PREFIX + 'portal'))
+        log('DEBUG', 'Remote GET: {0}'.format(PREFIX + 'portal'))
         self.urlopener.open(PREFIX + 'portal')  # get signin cookie
-        log('DEBUG', 'Remote HTTP POST {0}'.format(PREFIX + 'portal'))
+        log('DEBUG', 'Remote POST: {0}'.format(PREFIX + 'portal'))
         data = self.urlopener.open(request)  # actually sign in
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
@@ -90,7 +90,7 @@ class Client(object):
       headers['Content-Type'] = 'application/json; charset=utf-8'
     request = urllib.request.Request(PREFIX + path, data, headers)
     try:
-      log('DEBUG', 'Remote HTTP GET {0}'.format(PREFIX + path))
+      log('DEBUG', 'Remote GET: {0}'.format(PREFIX + path))
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
       log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
