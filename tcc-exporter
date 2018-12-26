@@ -5,19 +5,23 @@ import inspect
 import json
 import os
 import re
+import socket
 import time
 import urllib.parse
 import urllib.request
+import yaml
 
+from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.8.12'
+VERSION = '0.9.0'
+CONFIG_FILE = 'persistent/config.yml'
 PREFIX = 'https://mytotalconnectcomfort.com/'
-devices = list()
 
 # Set your TCC_LOGLEVEL to either the string or index number for your base logging level.
 LOGLEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
+
 
 class Client(object):
   _backoff = 0
@@ -26,12 +30,18 @@ class Client(object):
   _max_backoff = 300
 
   def __init__(self, username, password):
+    global config
+    self.cookiejar = LWPCookieJar(config['exporter.cookiejar'])
     self.username = username
     self.password = password
     self.urlopener = urllib.request.build_opener()
     self.urlopener.addheaders = [('User-Agent', 'tcc-exporter/'+VERSION)]
-    self.urlopener.add_handler(urllib.request.HTTPCookieProcessor())
-    self.login()
+    try:
+      self.cookiejar.revert(ignore_discard=True, ignore_expires=False)
+    except:
+      pass
+    self.urlopener.add_handler(urllib.request.HTTPCookieProcessor(self.cookiejar))
+    #self.login()
 
   def login(self):
     form = {
@@ -44,6 +54,7 @@ class Client(object):
     }
     utc_seconds = time.mktime(time.gmtime())
     if (self._last_login + self._backoff <= utc_seconds):
+      log('DEBUG', 'Attempting login to the TCC portal.')
       self._last_login = time.mktime(time.gmtime())
       data = urllib.parse.urlencode(form).encode('utf-8')
       request = urllib.request.Request(PREFIX + 'portal', data, headers)
@@ -56,6 +67,7 @@ class Client(object):
         if '/portal/Account/LogOff' in decoded:
           log('INFO', 'Portal login successful.')
           self._backoff = 0
+          self.cookiejar.save(ignore_discard=True, ignore_expires=False)
           return True
         else:
           log('WARNING', 'Portal login failed.')
@@ -110,6 +122,7 @@ class Client(object):
     try:
       retval = json.load(reader(data))
       self._backoff = 0 # We got decodable JSON, reset the backoff.
+      self.cookiejar.save(ignore_discard=True, ignore_expires=False)
       return retval
     except json.JSONDecodeError as e:
       log('INFO', 'Portal returned invalid data.')
@@ -193,23 +206,61 @@ def do_stuff(device, name, obj):
   
 
 def log(level, *message):
+  global config
   # If we were called with a descriptive string, find the index.
   if isinstance(level, str):
     level = LOGLEVELS.index(level)
   # TCC_LOGLEVEL can be either a text or a number.
-  if os.environ.get('TCC_LOGLEVEL').isdigit():
-    debug_level = int(os.environ.get('TCC_LOGLEVEL'))
+  if config['log.level'].isdigit():
+    debug_level = int(config['log.level'])
   else:
-    debug_level = LOGLEVELS.index(os.environ.get('TCC_LOGLEVEL'))
+    debug_level = LOGLEVELS.index(config['log.level'].upper())
   if (level <= debug_level):
     print("[{0}] {1}".format(LOGLEVELS[level], " ".join(message)))
 
 
+def load_config():
+  global config
+  if not 'config' in globals():
+    config = {}
+  # Load environment settings 
+  if not 'tcc.username' in config and os.environ.get('TCC_USERNAME'):
+    config['tcc.username'] = os.environ.get('TCC_USERNAME')
+  if not 'tcc.password' in config and os.environ.get('TCC_PASSWORD'):
+    config['tcc.password'] = os.environ.get('TCC_PASSWORD')
+  if not 'log.level' in config and os.environ.get('TCC_LOGLEVEL'):
+    config['log.level'] = os.environ.get('TCC_LOGLEVEL')
+  # This is for legacy compatibility.
+  if not 'exporter.port' in config and os.environ.get('TCC_EXPORTER_PORT'):
+    config['exporter.port'] = os.environ.get('TCC_EXPORTER_PORT')
+  # Set defaults if missing.
+  if not 'log.level' in config:
+    config['log.level'] = 'INFO'
+  if not 'tcc.timeout' in config:
+    config['tcc.timeout'] = 10
+  if not 'exporter.host' in config:
+    config['exporter.host'] = '0.0.0.0'
+  if not 'exporter.port' in config:
+    config['exporter.port'] = 9101
+  if not 'exporter.cookiejar' in config:
+    config['exporter.cookiejar'] = 'persistent/cookies.txt'
+  # Override with config file.
+  if 'config' in globals() and 'log.level' in config:
+    log('DEBUG', 'Loading config: {0}'.format(CONFIG_FILE))
+  try:
+    with open(CONFIG_FILE, 'r') as cfile:
+      config = yaml.load(cfile)
+  except FileNotFoundError as e:
+    log('ERROR', 'Config file {0} missing.'.format(CONFIG_FILE))
+  except Exception as e:
+    log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+
+
 def main():
-  global client, devices
-  log('DEBUG', 'Portal username: {0}'.format(os.environ.get('TCC_USERNAME')))
-  log('DEBUG', 'Portal password: {0}'.format(os.environ.get('TCC_PASSWORD')))
-  client = Client(os.environ.get('TCC_USERNAME'), os.environ.get('TCC_PASSWORD'))
+  global client, config, devices
+  log('DEBUG', 'Portal username: {0}'.format(config['tcc.username']))
+  log('DEBUG', 'Portal password: {0}'.format(config['tcc.password']))
+  client = Client(config['tcc.username'], config['tcc.password'])
   try:
     for location in client.locations():
       for device in location['Devices']:
@@ -221,13 +272,17 @@ def main():
   except Exception as e:
     log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     return
-  server_address=('0.0.0.0', int(os.environ.get('TCC_EXPORTER_PORT')))
+  server_address=(config['exporter.host'], int(config['exporter.port']))
   httpd = HTTPServer(server_address, Server)
   log('DEBUG', 'Starting server: http://{0}:{1}'.format(server_address[0], server_address[1]))
   httpd.serve_forever()
 
 
 if __name__ == '__main__':
+  global config, devices
+  devices=[]
+  load_config()
   log('INFO', 'tcc-exporter/{0}'.format(VERSION))
+  socket.setdefaulttimeout(int(config['tcc.timeout']))
   main()
 

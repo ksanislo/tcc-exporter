@@ -1,0 +1,7 @@
+log.level: INFO
+tcc.username: your-login@email-address.com
+tcc.password: your-password
+tcc.timeout: 10
+exporter.host: 0.0.0.0
+exporter.port: 9101
+exporter.cookiejar: persistent/cookies.txt
