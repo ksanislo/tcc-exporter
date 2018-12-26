@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import datetime
 import codecs
 import inspect
 import json
@@ -16,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.4'
+VERSION = '0.9.5'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -125,7 +126,8 @@ class Client(object):
     try:
       retval = json.load(reader(data))
       self._backoff = 0 # We got decodable JSON, reset the backoff.
-      self.cookiejar.save(ignore_discard=True, ignore_expires=False)
+      if (os.path.getmtime(config['exporter.cookiejar']) + config['exporter.sync_interval'] <= time.time()):
+        self.cookiejar.save(ignore_discard=True, ignore_expires=False)
       return retval
     except json.JSONDecodeError as e:
       log('INFO', 'Portal returned invalid data.')
@@ -241,6 +243,8 @@ def load_config():
     config['exporter.port'] = 9101
   if not 'exporter.cookiejar' in config:
     config['exporter.cookiejar'] = 'persistent/cookies.txt'
+  if not 'exporter.sync_interval' in config:
+    config['exporter.sync_interval'] = 300
   if not 'legacy.override' in config:
     config['legacy.override'] = True
   # Override with config file.

@@ -5,6 +5,7 @@ tcc.timeout: 10
 exporter.host: 0.0.0.0
 exporter.port: 9101
 exporter.cookiejar: persistent/cookies.txt
+exporter.sync_interval: 300
 
 # This makes legacy TCC_* env variables override values from this config file.
 legacy.override: True
