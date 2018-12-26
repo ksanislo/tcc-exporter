@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.6'
+VERSION = '0.9.7'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -80,13 +80,13 @@ class Client(object):
             self._backoff = self._max_backoff
           else:
             self._backoff = self._backoff * 2
-          log('INFO', 'Set login retry delay to {0} seconds.'.format(self._backoff))
+          log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
           return False
       except Exception as e:
         log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
         return False
     else:
-      log('INFO', 'Login retry delayed another {0} seconds.'.format(int(self._last_login + self._backoff - utc_seconds)))
+      log('DEBUG', 'Login retry delayed another {0} seconds.'.format(int(self._last_login + self._backoff - utc_seconds)))
       return False
 
   def _request(self, path, data={}, headers={}):
@@ -235,6 +235,16 @@ def load_config():
   global client, config
   if not 'config' in globals():
     config = {}
+  if 'log.level' in config: # We can't log unless we know our level.
+    log('DEBUG', 'Loading config: {0}'.format(CONFIG_FILE))
+  # Load config file.
+  try:
+    with open(CONFIG_FILE, 'r') as cfile:
+      config = yaml.load(cfile)
+  except FileNotFoundError as e:
+    log('ERROR', 'Config file {0} missing.'.format(CONFIG_FILE))
+  except Exception as e:
+    log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
   # Set defaults if missing.
   if not 'log.level' in config:
     config['log.level'] = 'INFO'
@@ -250,16 +260,7 @@ def load_config():
     config['exporter.sync_interval'] = 300
   if not 'legacy.override' in config:
     config['legacy.override'] = True
-  # Override with config file.
-  if 'log.level' in config:
-    log('DEBUG', 'Loading config: {0}'.format(CONFIG_FILE))
-  try:
-    with open(CONFIG_FILE, 'r') as cfile:
-      config = yaml.load(cfile)
-  except FileNotFoundError as e:
-    log('ERROR', 'Config file {0} missing.'.format(CONFIG_FILE))
-  except Exception as e:
-    log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+  # Override if allowed.
   if 'legacy.override' in config and config['legacy.override']:
     # Load environment settings 
     if os.environ.get('TCC_USERNAME'):
