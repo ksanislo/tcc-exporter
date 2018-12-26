@@ -16,7 +16,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.1'
+VERSION = '0.9.2'
 CONFIG_FILE = 'persistent/config.yml'
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -42,7 +42,6 @@ class Client(object):
     except:
       pass
     self.urlopener.add_handler(urllib.request.HTTPCookieProcessor(self.cookiejar))
-    #self.login()
 
   def login(self):
     form = {
@@ -108,6 +107,9 @@ class Client(object):
     except HTTPError as e:
       log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
+    except socket.timeout as e:
+      log('INFO', 'Portal timeout ({0}s).'.format(config['tcc.timeout']))
+      return 504
     except Exception as e:
       log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
       return 500
@@ -225,19 +227,9 @@ def hup_handler(signum, frame):
 
 
 def load_config():
-  global config
+  global client, config
   if not 'config' in globals():
     config = {}
-  # Load environment settings 
-  if not 'tcc.username' in config and os.environ.get('TCC_USERNAME'):
-    config['tcc.username'] = os.environ.get('TCC_USERNAME')
-  if not 'tcc.password' in config and os.environ.get('TCC_PASSWORD'):
-    config['tcc.password'] = os.environ.get('TCC_PASSWORD')
-  if not 'log.level' in config and os.environ.get('TCC_LOGLEVEL'):
-    config['log.level'] = os.environ.get('TCC_LOGLEVEL')
-  # This is for legacy compatibility.
-  if not 'exporter.port' in config and os.environ.get('TCC_EXPORTER_PORT'):
-    config['exporter.port'] = os.environ.get('TCC_EXPORTER_PORT')
   # Set defaults if missing.
   if not 'log.level' in config:
     config['log.level'] = 'INFO'
@@ -249,8 +241,10 @@ def load_config():
     config['exporter.port'] = 9101
   if not 'exporter.cookiejar' in config:
     config['exporter.cookiejar'] = 'persistent/cookies.txt'
+  if not 'legacy.override' in config:
+    config['legacy.override'] = True
   # Override with config file.
-  if 'config' in globals() and 'log.level' in config:
+  if 'log.level' in config:
     log('DEBUG', 'Loading config: {0}'.format(CONFIG_FILE))
   try:
     with open(CONFIG_FILE, 'r') as cfile:
@@ -259,13 +253,29 @@ def load_config():
     log('ERROR', 'Config file {0} missing.'.format(CONFIG_FILE))
   except Exception as e:
     log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+  if 'legacy.override' in config and config['legacy.override']:
+    # Load environment settings 
+    if os.environ.get('TCC_USERNAME'):
+      config['tcc.username'] = os.environ.get('TCC_USERNAME')
+    if os.environ.get('TCC_PASSWORD'):
+      config['tcc.password'] = os.environ.get('TCC_PASSWORD')
+    if os.environ.get('TCC_LOGLEVEL'):
+      config['log.level'] = os.environ.get('TCC_LOGLEVEL')
+    if os.environ.get('TCC_EXPORTER_PORT'):
+      config['exporter.port'] = os.environ.get('TCC_EXPORTER_PORT')
+    if os.environ.get('TCC_EXPORTER_COOKIEJAR'):
+      config['exporter.cookiejar'] = os.environ.get('TCC_EXPORTER_COOKIEJAR')
+  log('DEBUG', 'Configuration: '+str(config))
+  socket.setdefaulttimeout(int(config['tcc.timeout']))
+  client = Client(config['tcc.username'], config['tcc.password'])
 
 
 def main():
   global client, config, devices
-  log('DEBUG', 'Portal username: {0}'.format(config['tcc.username']))
-  log('DEBUG', 'Portal password: {0}'.format(config['tcc.password']))
-  client = Client(config['tcc.username'], config['tcc.password'])
+  devices = []
+  load_config()
+  log('INFO', 'tcc-exporter/{0}'.format(VERSION))
+  signal.signal(signal.SIGHUP, hup_handler)
   try:
     for location in client.locations():
       for device in location['Devices']:
@@ -284,11 +294,5 @@ def main():
 
 
 if __name__ == '__main__':
-  global config, devices
-  devices=[]
-  load_config()
-  log('INFO', 'tcc-exporter/{0}'.format(VERSION))
-  socket.setdefaulttimeout(int(config['tcc.timeout']))
-  signal.signal(signal.SIGHUP, hup_handler)
   main()
 
