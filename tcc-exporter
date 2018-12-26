@@ -16,7 +16,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.3'
+VERSION = '0.9.4'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -279,7 +279,7 @@ def main():
   try:
     for location in client.locations():
       for device in location['Devices']:
-        log('DEBUG', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
+        log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
         devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
   except TypeError as e:
     log('CRITICAL', 'Failed to collect our list of known locations and devices. Aborting.')
@@ -289,7 +289,7 @@ def main():
     return
   server_address=(config['exporter.host'], int(config['exporter.port']))
   httpd = HTTPServer(server_address, Server)
-  log('DEBUG', 'Starting server: http://{0}:{1}'.format(server_address[0], server_address[1]))
+  log('INFO', 'Starting server: http://{0}:{1}'.format(server_address[0], server_address[1]))
   httpd.serve_forever()
 
 
