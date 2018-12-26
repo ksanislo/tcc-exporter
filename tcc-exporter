@@ -16,8 +16,8 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.2'
-CONFIG_FILE = 'persistent/config.yml'
+VERSION = '0.9.3'
+CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
 # Set your TCC_LOGLEVEL to either the string or index number for your base logging level.
