@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.5'
+VERSION = '0.9.6'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -39,9 +39,10 @@ class Client(object):
     self.urlopener = urllib.request.build_opener()
     self.urlopener.addheaders = [('User-Agent', 'tcc-exporter/'+VERSION)]
     try:
+      log('DEBUG', 'Loading cookiejar: {0}'.format(config['exporter.cookiejar']))
       self.cookiejar.revert(ignore_discard=True, ignore_expires=False)
-    except:
-      pass
+    except Exception as e:
+      log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     self.urlopener.add_handler(urllib.request.HTTPCookieProcessor(self.cookiejar))
 
   def login(self):
@@ -68,6 +69,7 @@ class Client(object):
         if '/portal/Account/LogOff' in decoded:
           log('INFO', 'Portal login successful.')
           self._backoff = 0
+          log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
           self.cookiejar.save(ignore_discard=True, ignore_expires=False)
           return True
         else:
@@ -127,6 +129,7 @@ class Client(object):
       retval = json.load(reader(data))
       self._backoff = 0 # We got decodable JSON, reset the backoff.
       if (os.path.getmtime(config['exporter.cookiejar']) + config['exporter.sync_interval'] <= time.time()):
+        log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
         self.cookiejar.save(ignore_discard=True, ignore_expires=False)
       return retval
     except json.JSONDecodeError as e:
