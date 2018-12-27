@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.9'
+VERSION = '0.9.10'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -111,7 +111,7 @@ class Client(object):
       log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
     except socket.timeout as e:
-      log('INFO', 'Portal timeout ({0}s).'.format(config['tcc.timeout']))
+      log('INFO', 'Portal status: 504 - Socket timeout')
       return 504
     except Exception as e:
       log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
