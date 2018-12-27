@@ -1,4 +1,9 @@
 ---
+# This file configures the tcc-exporter service, an alternative
+# location can be specified via the TCC_CONFIG_FILE environment
+# variable. Default values are provided as comments, at a minimum
+# the portal login information must be provided.
+
 # This controls the logging verbosity, avaliable choices are:
 # CRITICAL, ERROR, WARNING, INFO, or DEBUG
 # Log entries for all previous levels are also included.
@@ -6,6 +11,7 @@
 
 # These are the username and password used to login to your
 # mytotalconnectcomfort.com account to collect your stats.
+# These must be filled, there are no default values for this.
 tcc.username: your-login@email-address.com
 tcc.password: your-password
 
@@ -14,10 +20,11 @@ tcc.password: your-password
 # this set shorter than your prometheus collection interval.
 #tcc.timeout: 10
 
-# The local interface to which tcc-exporter will bind for it's service
+# The local interface to which tcc-exporter will bind 
+# for it's listening service.
 #exporter.host: 0.0.0.0
 
-# The TCP port number to listen on.
+# The TCP port to listen on.
 #exporter.port: 9101
 
 # This controls the path where login cookies are stored. If you're using
@@ -26,10 +33,12 @@ tcc.password: your-password
 # through restarts, it's easy to trigger the too-many-logins message.
 #exporter.cookiejar: persistent/cookies.txt
 
-# This controls the minimum age of the exporter.cookiejar file before it
-# is overwritten during normal operations. A successful login() doesn't
-# check this, so fresh cookies will always be saved immediately.
+# This controls the minimum age of the exporter.cookiejar file in seconds
+# before it is allowed to be overwritten during normal operations.
+# login() doesn't check this, so fresh auth cookies will be saved immediately.
+# If set to 0, the cookies file will be updated with every GET request.
 #exporter.sync_interval: 300
 
 # This allows TCC_* env variables override values from this config file.
+# Disable if you want to be 100% sure this file is the authorative source.
 #config.override: True
