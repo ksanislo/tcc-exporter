@@ -1,11 +1,35 @@
-log.level: INFO
+---
+# This controls the logging verbosity, avaliable choices are:
+# CRITICAL, ERROR, WARNING, INFO, or DEBUG
+# Log entries for all previous levels are also included.
+#log.level: INFO
+
+# These are the username and password used to login to your
+# mytotalconnectcomfort.com account to collect your stats.
 tcc.username: your-login@email-address.com
 tcc.password: your-password
-tcc.timeout: 10
-exporter.host: 0.0.0.0
-exporter.port: 9101
-exporter.cookiejar: persistent/cookies.txt
-exporter.sync_interval: 300
 
-# This makes legacy TCC_* env variables override values from this config file.
-legacy.override: True
+# This controls adjusts the timeouts used by the exporter.
+# Length is specified in seconds. It's generally best to keep
+# this set shorter than your prometheus collection interval.
+#tcc.timeout: 10
+
+# The local interface to which tcc-exporter will bind for it's service
+#exporter.host: 0.0.0.0
+
+# The TCP port number to listen on.
+#exporter.port: 9101
+
+# This controls the path where login cookies are stored. If you're using
+# the standard docker container, this should be somewhere mounted via
+# persistent storage. While not critical, if you don't maintain cookies
+# through restarts, it's easy to trigger the too-many-logins message.
+#exporter.cookiejar: persistent/cookies.txt
+
+# This controls the minimum age of the exporter.cookiejar file before it
+# is overwritten during normal operations. A successful login() doesn't
+# check this, so fresh cookies will always be saved immediately.
+#exporter.sync_interval: 300
+
+# This allows TCC_* env variables override values from this config file.
+#config.override: True

@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.7'
+VERSION = '0.9.8'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -258,10 +258,10 @@ def load_config():
     config['exporter.cookiejar'] = 'persistent/cookies.txt'
   if not 'exporter.sync_interval' in config:
     config['exporter.sync_interval'] = 300
-  if not 'legacy.override' in config:
-    config['legacy.override'] = True
+  if not 'config.override' in config:
+    config['config.override'] = True
   # Override if allowed.
-  if 'legacy.override' in config and config['legacy.override']:
+  if 'config.override' in config and config['config.override']:
     # Load environment settings 
     if os.environ.get('TCC_USERNAME'):
       config['tcc.username'] = os.environ.get('TCC_USERNAME')
