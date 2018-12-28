@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.12'
+VERSION = '0.9.13'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -164,13 +164,16 @@ class Server(BaseHTTPRequestHandler):
   def do_GET(self):
     log('DEBUG', 'Handling request: {0}'.format(self.requestline))
     results = bytes()
-    for device in devices:
-      data = client.device_status(device['DeviceID'])
-      if isinstance(data, dict):
-        results = results + do_stuff(device, device['DeviceID'], data).encode('utf-8')
+    if not devices:
+      find_devices()
+    if devices:
+      for device in devices:
+        data = client.device_status(device['DeviceID'])
+        if isinstance(data, dict):
+          results = results + do_stuff(device, device['DeviceID'], data).encode('utf-8')
     if results:
       self.send_response(200)
-    elif isinstance(data, int):
+    elif 'data' in globals() and isinstance(data, int):
       self.send_response(data)
     else:
       self.send_response(520) # Cloudflare's "520". No results, no idea why.
@@ -251,7 +254,7 @@ def find_devices():
         log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
         devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
   except TypeError as e:
-    log('CRITICAL', 'Failed to collect our list of known locations and devices. Aborting.')
+    log('CRITICAL', 'Failed to collect our list of known locations and devices.')
     return
   except Exception as e:
     log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
