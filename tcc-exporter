@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.14'
+VERSION = '0.9.15'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -248,7 +248,8 @@ def hup_handler(signum, frame):
 
 
 def usr1_handler(signum, frame):
-  log('DEBUG', 'Configuration dump:\n\n' + yaml.dump(config,default_flow_style = False))
+  log('DEBUG', 'Active configuration:')
+  print(yaml.dump(config,default_flow_style = False), end='')
 
 
 def usr2_handler(signum, frame):
