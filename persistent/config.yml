@@ -21,10 +21,10 @@ tcc.password: your-password
 #tcc.timeout: 10
 
 # The backoff is used to control how quickly we will try to login()
-# after a previous login failure. Each subsequent failure will double
-# the backoff value, until it reaches the backoff_limit. Logins will
-# then be capped at one attempt per limit count, until either we get
-# valid data or another successful login.
+# The backoff value doubles with each subsequent failed login until
+# the backoff_limit is reached. Login attempts will be capped at
+# the limit until either we get valid data or another successful login.
+#
 # A notice of "too many logins" jumps to the limit instantly.
 #tcc.backoff: 15
 #tcc.backoff_limit: 300

@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.13'
+VERSION = '0.9.14'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -26,7 +26,7 @@ LOGLEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
 
 
 class Client(object):
-  _backoff = 0
+  _backoff = 0 # No login delay at startup
   _last_login = 0
 
   def __init__(self, username, password):
@@ -66,7 +66,7 @@ class Client(object):
         decoded = data.read().decode()
         if '/portal/Account/LogOff' in decoded:
           log('INFO', 'Portal login successful.')
-          self._backoff = 0
+          self._backoff = config['tcc.backoff']
           log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
           self.cookiejar.save(ignore_discard=True, ignore_expires=False)
           return True
@@ -82,6 +82,15 @@ class Client(object):
           self._backoff = config['tcc.backoff_limit']
         log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
         return False
+      except HTTPError as e:
+        log('INFO', 'Login status: {0} - {1}'.format(e.code, e.reason))
+        return e.code
+      except ConnectionResetError as e:
+        log('INFO', 'Login status: 502 - Connection reset by peer')
+        return 502
+      except socket.timeout as e:
+        log('INFO', 'Login status: 504 - Socket timeout')
+        return 504
       except Exception as e:
         log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
         return False
@@ -110,6 +119,9 @@ class Client(object):
     except HTTPError as e:
       log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
+    except ConnectionResetError as e:
+      log('INFO', 'Portal status: 502 - Connection reset by peer')
+      return 502
     except socket.timeout as e:
       log('INFO', 'Portal status: 504 - Socket timeout')
       return 504
@@ -127,7 +139,7 @@ class Client(object):
     reader = codecs.getreader(data.headers.get_content_charset())
     try:
       retval = json.load(reader(data))
-      self._backoff = 0 # We got decodable JSON, reset the backoff.
+      self._backoff = config['tcc.backoff'] # We got decodable JSON, reset the backoff.
       if (os.path.getmtime(config['exporter.cookiejar']) + config['exporter.sync_interval'] <= time.time()):
         log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
         self.cookiejar.save(ignore_discard=True, ignore_expires=False)
@@ -247,19 +259,20 @@ def usr2_handler(signum, frame):
 
 def find_devices():
   global devices
-  devices = []
   try:
-    for location in client.locations():
-      for device in location['Devices']:
-        log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
-        devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
-  except TypeError as e:
-    log('CRITICAL', 'Failed to collect our list of known locations and devices.')
-    return
+    locations = client.locations()
   except Exception as e:
     log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
     return
-
+  if not isinstance(locations, list):
+    # Not a list, so we got a failure 
+    log('CRITICAL', 'Failed to collect our list of known locations and devices.')
+    return
+  devices = [] # Wipe existing devices 
+  for location in locations:
+    for device in location['Devices']:
+      log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
+      devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
 
 def load_config():
   global client, config
