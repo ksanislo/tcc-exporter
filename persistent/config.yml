@@ -20,6 +20,15 @@ tcc.password: your-password
 # this set shorter than your prometheus collection interval.
 #tcc.timeout: 10
 
+# The backoff is used to control how quickly we will try to login()
+# after a previous login failure. Each subsequent failure will double
+# the backoff value, until it reaches the backoff_limit. Logins will
+# then be capped at one attempt per limit count, until either we get
+# valid data or another successful login.
+# A notice of "too many logins" jumps to the limit instantly.
+#tcc.backoff: 15
+#tcc.backoff_limit: 300
+
 # The local interface to which tcc-exporter will bind 
 # for it's listening service.
 #exporter.host: 0.0.0.0

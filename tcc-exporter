@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.10'
+VERSION = '0.9.11'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -28,8 +28,6 @@ LOGLEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
 class Client(object):
   _backoff = 0
   _last_login = 0
-  _min_backoff = 15
-  _max_backoff = 300
 
   def __init__(self, username, password):
     global config
@@ -72,16 +70,18 @@ class Client(object):
           log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
           self.cookiejar.save(ignore_discard=True, ignore_expires=False)
           return True
+        log('WARNING', 'Portal login failed.')
+        if (self._backoff < config['tcc.backoff']):
+          self._backoff = config['tcc.backoff']
+        elif (self._backoff * 2 > config['tcc.backoff_limit']):
+          self._backoff = config['tcc.backoff_limit']
         else:
-          log('WARNING', 'Portal login failed.')
-          if (self._backoff < self._min_backoff):
-            self._backoff = self._min_backoff
-          elif (self._backoff * 2 > self._max_backoff):
-            self._backoff = self._max_backoff
-          else:
-            self._backoff = self._backoff * 2
-          log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
-          return False
+          self._backoff = self._backoff * 2
+        if 'exceeded the maximum number of attempts' in decoded:
+          log('WARNING', 'Portal said we have exceeded the maximum number of login attempts.')
+          self._backoff = config['tcc.backoff_limit']
+        log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
+        return False
       except Exception as e:
         log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
         return False
@@ -229,6 +229,33 @@ def log(level, *message):
 
 def hup_handler(signum, frame):
   load_config()
+  find_devices()
+
+
+def usr1_handler(signum, frame):
+  log('DEBUG', 'Configuration dump:\n\n' + yaml.dump(config,default_flow_style = False))
+
+
+def usr2_handler(signum, frame):
+  global client
+  client._backoff = 0
+  client.login()
+
+
+def find_devices():
+  global devices
+  devices = []
+  try:
+    for location in client.locations():
+      for device in location['Devices']:
+        log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
+        devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
+  except TypeError as e:
+    log('CRITICAL', 'Failed to collect our list of known locations and devices. Aborting.')
+    return
+  except Exception as e:
+    log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
+    return
 
 
 def load_config():
@@ -250,6 +277,10 @@ def load_config():
     config['log.level'] = 'INFO'
   if not 'tcc.timeout' in config:
     config['tcc.timeout'] = 10
+  if not 'tcc.backoff' in config:
+    config['tcc.backoff'] = 15
+  if not 'tcc.backoff_limit' in config:
+    config['tcc.backoff_limit'] = 300
   if not 'exporter.host' in config:
     config['exporter.host'] = '0.0.0.0'
   if not 'exporter.port' in config:
@@ -273,7 +304,6 @@ def load_config():
       config['exporter.port'] = os.environ.get('TCC_EXPORTER_PORT')
     if os.environ.get('TCC_EXPORTER_COOKIEJAR'):
       config['exporter.cookiejar'] = os.environ.get('TCC_EXPORTER_COOKIEJAR')
-  log('DEBUG', 'Configuration: '+str(config))
   socket.setdefaulttimeout(int(config['tcc.timeout']))
   client = Client(config['tcc.username'], config['tcc.password'])
 
@@ -282,19 +312,11 @@ def main():
   global client, config, devices
   devices = []
   load_config()
-  log('INFO', 'tcc-exporter/{0}'.format(VERSION))
+  log('INFO', 'tcc-exporter/{0} [pid: {1}]'.format(VERSION, os.getpid()))
   signal.signal(signal.SIGHUP, hup_handler)
-  try:
-    for location in client.locations():
-      for device in location['Devices']:
-        log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
-        devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
-  except TypeError as e:
-    log('CRITICAL', 'Failed to collect our list of known locations and devices. Aborting.')
-    return
-  except Exception as e:
-    log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
-    return
+  signal.signal(signal.SIGUSR1, usr1_handler)
+  signal.signal(signal.SIGUSR2, usr2_handler)
+  log('DEBUG', 'SIGHUP:reload config, SIGUSR1:show config, SIGUSR2: reattempt login')
   server_address=(config['exporter.host'], int(config['exporter.port']))
   httpd = HTTPServer(server_address, Server)
   log('INFO', 'Starting server: http://{0}:{1}'.format(server_address[0], server_address[1]))
