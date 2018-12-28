@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError
 
-VERSION = '0.9.11'
+VERSION = '0.9.12'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -312,6 +312,7 @@ def main():
   global client, config, devices
   devices = []
   load_config()
+  find_devices()
   log('INFO', 'tcc-exporter/{0} [pid: {1}]'.format(VERSION, os.getpid()))
   signal.signal(signal.SIGHUP, hup_handler)
   signal.signal(signal.SIGUSR1, usr1_handler)
