@@ -7,7 +7,7 @@ Avaliable from the docker hub:
 
 docker run -t
   -v tcc-exporter-config:/usr/src/tcc-exporter/persistent
-  -p 9101:9101
+  -p 9528:9528
   ksanislo/tcc-exporter
 
 If you mount the folder /usr/src/tcc-exporter/persistent as a volume instead of just mapping the config.yml itself, the login cookies can be maintained between restarts. This helps prevent being temporarily blocked by the TCC portal for logging in too fast. 
