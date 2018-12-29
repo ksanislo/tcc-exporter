@@ -34,7 +34,7 @@ tcc.password: your-password
 #exporter.host: 0.0.0.0
 
 # The TCP port to listen on.
-#exporter.port: 9101
+#exporter.port: 9528
 
 # This controls the path where login cookies are stored. If you're using
 # the standard docker container, this should be somewhere mounted via

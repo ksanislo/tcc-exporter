@@ -301,7 +301,7 @@ def load_config():
   if not 'exporter.host' in config:
     config['exporter.host'] = '0.0.0.0'
   if not 'exporter.port' in config:
-    config['exporter.port'] = 9101
+    config['exporter.port'] = 9528
   if not 'exporter.cookiejar' in config:
     config['exporter.cookiejar'] = 'persistent/cookies.txt'
   if not 'exporter.sync_interval' in config:
