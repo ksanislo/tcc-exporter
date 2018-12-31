@@ -6,5 +6,6 @@ WORKDIR /usr/src/tcc-exporter
 RUN pip install dumb-init
 RUN pip install pyyaml
 COPY --chown=tcc-exporter:tcc-exporter . /usr/src/tcc-exporter/
+ENV TCC_CONFIG_FILE="persistent/config.yml"
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["python", "./tcc-exporter"]

@@ -48,6 +48,6 @@ tcc.password: your-password
 # If set to 0, the cookies file will be updated with every GET request.
 #exporter.sync_interval: 300
 
-# This allows TCC_* env variables override values from this config file.
+# This allows TCC_* env variables to override values from this config file.
 # Disable if you want to be 100% sure this file is the authorative source.
 #config.override: True
