@@ -17,13 +17,13 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 
-VERSION = '1.0.1'
+VERSION = '1.1.0'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
 # Set your TCC_LOGLEVEL to either the string or index number for your base logging level.
 LOGLEVELS = ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']
-
+lfh = None
 
 class Client(object):
   _backoff = 0 # No login delay at startup
@@ -137,18 +137,18 @@ class Client(object):
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
-    data = self._request_data(path, {})
+    data = self._request_data(path, {}) # POST but no data.
     return data
 
   def location_overview(self, locationId):
     path = 'portal/Device/GetZoneListData?locationId=%s&page=1' % (locationId,)
-    data = self._request_data(path, {})
+    data = self._request_data(path, {}) # POST but no data.
     return data
 
   def device_status(self, device_id):
     utc_milliseconds = int(round(time.time() * 1000))
     path = 'portal/Device/CheckDataSession/%s?_=%s' % (device_id, utc_milliseconds)
-    data = self._request_data(path)
+    data = self._request_data(path) # GET
     return data
 
 
@@ -213,10 +213,10 @@ def do_stuff(device, name, obj):
   
 
 def log(level, *message):
-  global config
+  global config, lfh
   # If we were called with a descriptive string, find the index.
   if isinstance(level, str):
-    level = LOGLEVELS.index(level)
+    level = LOGLEVELS.index(level.upper())
   # TCC_LOGLEVEL can be either a text or a number.
   if config['log.level'].isdigit():
     debug_level = int(config['log.level'])
@@ -224,6 +224,14 @@ def log(level, *message):
     debug_level = LOGLEVELS.index(config['log.level'].upper())
   if (level <= debug_level):
     print("[{0}] {1}".format(LOGLEVELS[level], " ".join(message)))
+  if config['log.file']:
+    lfh = open(config['log.file'], 'a')
+  try:
+    timestring = time.strftime('%D %T')
+    lfh.write("{0} [{1}] {2}\n".format(timestring, LOGLEVELS[level], " ".join(message)))
+    lfh.flush()
+  except:
+    pass
 
 
 def hup_handler(signum, frame):
@@ -257,11 +265,13 @@ def find_devices():
 
 
 def load_config():
-  global client, config
+  global client, config, lfh
   if not 'config' in globals():
     config = {}
   if 'log.level' in config: # We can't log unless we know our level.
     log('DEBUG', 'Loading config: {0}'.format(CONFIG_FILE))
+  if lfh: # Close any previously open log file.
+    lfh.close()
   # Load config file.
   try:
     with open(CONFIG_FILE, 'r') as cfile:
@@ -273,6 +283,8 @@ def load_config():
   # Set defaults if missing.
   if not 'log.level' in config:
     config['log.level'] = 'INFO'
+  if not 'log.file' in config:
+    config['log.file'] = None
   if not 'tcc.timeout' in config:
     config['tcc.timeout'] = 10
   if not 'tcc.backoff' in config:

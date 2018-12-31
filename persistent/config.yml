@@ -9,6 +9,10 @@
 # Log entries for all previous levels are also included.
 #log.level: INFO
 
+# Optionally, you can provide a log.file where messages
+# can be sent in addition to seeing them on stdout.
+#log.file: None
+
 # These are the username and password used to login to your
 # mytotalconnectcomfort.com account to collect your stats.
 # These must be filled, there are no default values for this.
