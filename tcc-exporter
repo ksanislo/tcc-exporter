@@ -15,9 +15,9 @@ import yaml
 
 from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -44,81 +44,55 @@ class Client(object):
     self.urlopener.add_handler(urllib.request.HTTPCookieProcessor(self.cookiejar))
 
   def login(self):
-    form = {
-      'UserName': self.username,
-      'Password': self.password,
-      'RememberMe': 'False'
-    }
-    headers = {
-      'Origin': PREFIX + 'portal',
-    }
     utc_seconds = time.mktime(time.gmtime())
     if (self._last_login + self._backoff <= utc_seconds):
-      log('DEBUG', 'Attempting login to the TCC portal.')
       self._last_login = time.mktime(time.gmtime())
-      data = urllib.parse.urlencode(form).encode('utf-8')
-      request = urllib.request.Request(PREFIX + 'portal', data, headers)
-      try:
-        log('DEBUG', 'Remote GET: {0}'.format(PREFIX + 'portal'))
-        self.urlopener.open(PREFIX + 'portal')  # get signin cookie
-        log('DEBUG', 'Remote POST: {0}'.format(PREFIX + 'portal'))
-        data = self.urlopener.open(request)  # actually sign in
-        decoded = data.read().decode()
-        if '/portal/Account/LogOff' in decoded:
-          log('INFO', 'Portal login successful.')
-          self._backoff = config['tcc.backoff']
-          log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
-          self.cookiejar.save(ignore_discard=True, ignore_expires=False)
-          return True
-        log('WARNING', 'Portal login failed.')
-        if (self._backoff < config['tcc.backoff']):
-          self._backoff = config['tcc.backoff']
-        elif (self._backoff * 2 > config['tcc.backoff_limit']):
-          self._backoff = config['tcc.backoff_limit']
-        else:
-          self._backoff = self._backoff * 2
-        if 'exceeded the maximum number of attempts' in decoded:
-          log('WARNING', 'Portal said we have exceeded the maximum number of login attempts.')
-          self._backoff = config['tcc.backoff_limit']
-        log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
-        return False
-      except HTTPError as e:
-        log('INFO', 'Login status: {0} - {1}'.format(e.code, e.reason))
-        return e.code
-      except ConnectionResetError as e:
-        log('INFO', 'Login status: 502 - Connection reset by peer')
-        return 502
-      except socket.timeout as e:
-        log('INFO', 'Login status: 504 - Socket timeout')
-        return 504
-      except Exception as e:
-        log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
-        return False
+      log('DEBUG', 'Attempting login to the TCC portal.')
+      self._request('portal', None, {})  # get signin cookie
+      form = urllib.parse.urlencode({
+        'UserName': self.username,
+        'Password': self.password,
+        'RememberMe': 'False'
+      }).encode('utf-8')
+      headers = { 'Origin': PREFIX + 'portal' }
+      data = self._request('portal', form, headers)
+      decoded = data.read().decode()
+      if '/portal/Account/LogOff' in decoded:
+        log('INFO', 'Portal login successful.')
+        self._backoff = config['tcc.backoff']
+        log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
+        self.cookiejar.save(ignore_discard=True, ignore_expires=False)
+        return True
+      log('WARNING', 'Portal login failed.')
+      if (self._backoff < config['tcc.backoff']):
+        self._backoff = config['tcc.backoff']
+      elif (self._backoff * 2 > config['tcc.backoff_limit']):
+        self._backoff = config['tcc.backoff_limit']
+      else:
+        self._backoff = self._backoff * 2
+      if 'exceeded the maximum number of attempts' in decoded:
+        log('WARNING', 'Portal said we have exceeded the maximum number of login attempts.')
+        self._backoff = config['tcc.backoff_limit']
+      log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
+      return False
     else:
       log('DEBUG', 'Login retry delayed another {0} seconds.'.format(int(self._last_login + self._backoff - utc_seconds)))
       return False
 
   def _request(self, path, data={}, headers={}):
-    if isinstance(data, str):
-      data = data.encode('utf-8')
-    elif isinstance(data, bytes):
-      data = data
-    elif data != {}:
-      data = json.dumps(data).encode('utf-8')
-    else:
-      data = None
-    headers = dict(headers)
-    headers['X-Requested-With'] = 'XMLHttpRequest'
-    headers['Accept'] = 'application/json, text/javascript'
-    if data != None:
-      headers['Content-Type'] = 'application/json; charset=utf-8'
     request = urllib.request.Request(PREFIX + path, data, headers)
-    try:
+    if (data == None):
       log('DEBUG', 'Remote GET: {0}'.format(PREFIX + path))
+    else:
+      log('DEBUG', 'Remote POST: {0}'.format(PREFIX + path))
+    try:
       return self.urlopener.open(request)  # actually fetch
     except HTTPError as e:
       log('INFO', 'Portal status: {0} - {1}'.format(e.code, e.reason))
       return e.code
+    except URLError as e:
+      log('INFO', 'Portal status: 504 - {0!r}'.format(e.reason))
+      return 504
     except ConnectionResetError as e:
       log('INFO', 'Portal status: 502 - Connection reset by peer')
       return 502
@@ -129,7 +103,17 @@ class Client(object):
       log('ERROR', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
       return 500
 
-  def _request_data(self, path, data={}, headers={}):
+  def _request_data(self, path, data=None, headers=None):
+    if isinstance(data, str):
+      data = data.encode('utf-8')
+    elif isinstance(data, dict):
+      data = json.dumps(data).encode('utf-8')
+    if (headers == None):
+      headers = dict()
+      headers['X-Requested-With'] = 'XMLHttpRequest'
+      headers['Accept'] = 'application/json, text/javascript'
+      if (data != None):
+        headers['Content-Type'] = 'application/json; charset=utf-8'
     data = self._request(path, data, headers)
     if isinstance(data, int) and (data == 401): # Login failure, lets try to login again.
       if self.login():
@@ -153,12 +137,12 @@ class Client(object):
 
   def locations(self):
     path = 'portal/Location/GetLocationListData?page=1&filter='
-    data = self._request_data(path, '')
+    data = self._request_data(path, {})
     return data
-    
+
   def location_overview(self, locationId):
     path = 'portal/Device/GetZoneListData?locationId=%s&page=1' % (locationId,)
-    data = self._request_data(path, '')
+    data = self._request_data(path, {})
     return data
 
   def device_status(self, device_id):
@@ -260,11 +244,7 @@ def usr2_handler(signum, frame):
 
 def find_devices():
   global devices
-  try:
-    locations = client.locations()
-  except Exception as e:
-    log('CRITICAL', '{0} {1}: {2!r}'.format(inspect.currentframe().f_code.co_name, type(e).__name__, e.args))
-    return
+  locations = client.locations()
   if not isinstance(locations, list):
     # Not a list, so we got a failure 
     log('CRITICAL', 'Failed to collect our list of known locations and devices.')
@@ -274,6 +254,7 @@ def find_devices():
     for device in location['Devices']:
       log('INFO', 'DeviceID: {0}, LocationID: {1}, MacID: {2}, Name: {3}'.format(device['DeviceID'],device['LocationID'],device['MacID'],device['Name']))
       devices.append({ 'DeviceID': device['DeviceID'], 'LocationID': device['LocationID'], 'MacID': device['MacID'], 'Name': device['Name'] })
+
 
 def load_config():
   global client, config
