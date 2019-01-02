@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 
-VERSION = '1.1.1'
+VERSION = '1.1.2'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -230,7 +230,7 @@ def log(level, *message):
     except FileNotFoundError:
       lfh = open(config['log.file'], 'w')
   try:
-    timestring = time.strftime('%D %T')
+    timestring = time.strftime('%D %T', time.localtime())
     lfh.write("{0} [{1}] {2}\n".format(timestring, LOGLEVELS[level], " ".join(message)))
     lfh.flush()
   except:
