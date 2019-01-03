@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 
-VERSION = '1.1.3'
+VERSION = '1.1.4'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -94,7 +94,7 @@ class Client(object):
       log('INFO', 'Portal status: 504 - {0!r}'.format(e.reason))
       return 504
     except TypeError as e:
-      log('INFO', 'Portal status: 504 - Whisky. Tango. Foxtrot. (TypeError)')
+      log('WARNING', 'Portal status: 504 - Whisky. Tango. Foxtrot. (TypeError)')
       return 504
     except ConnectionResetError as e:
       log('INFO', 'Portal status: 502 - Connection reset by peer')
@@ -117,15 +117,15 @@ class Client(object):
       headers['Accept'] = 'application/json, text/javascript'
       if (data != None):
         headers['Content-Type'] = 'application/json; charset=utf-8'
-    data = self._request(path, data, headers)
-    if isinstance(data, int) and (data == 401): # Login failure, lets try to login again.
+    retval = self._request(path, data, headers)
+    if isinstance(retval, int) and (retval == 401): # Login failure, lets try to login again.
       if self.login():
-        data = self._request(path, data, headers)
-    if isinstance(data, int):
-      return data # Another failure, just return the code.
-    reader = codecs.getreader(data.headers.get_content_charset())
+        retval = self._request(path, data, headers)
+    if isinstance(retval, int):
+      return retval # Another failure, just return the code.
+    reader = codecs.getreader(retval.headers.get_content_charset())
     try:
-      retval = json.load(reader(data))
+      retval = json.load(reader(retval))
       self._backoff = config['tcc.backoff'] # We got decodable JSON, reset the backoff.
       if (os.path.getmtime(config['exporter.cookiejar']) + config['exporter.sync_interval'] <= time.time()):
         log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
