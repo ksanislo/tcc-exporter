@@ -17,7 +17,7 @@ from http.cookiejar import LWPCookieJar
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 
-VERSION = '1.1.4'
+VERSION = '1.1.5'
 CONFIG_FILE = os.environ.get('TCC_CONFIG_FILE', 'persistent/config.yml')
 PREFIX = 'https://mytotalconnectcomfort.com/'
 
@@ -56,8 +56,14 @@ class Client(object):
       }).encode('utf-8')
       headers = { 'Origin': PREFIX + 'portal' }
       data = self._request('portal', form, headers)
-      decoded = data.read().decode()
-      if '/portal/Account/LogOff' in decoded:
+      try:
+        found = re.search('<h1(?: id=".*")?>(.+?)</h1>', data.read().decode()).group(1)
+        log('DEBUG', 'Found <h1>: {0}'.format(found))
+      except:
+        found = '' # Match not found
+        if isinstance(data, int):
+          log('INFO', 'Login response status: {0}'.format(data))
+      if 'Control' in found: # Valid logins get "#{THERMOSTAT_NAME} Control" for the <h1> tag.
         log('INFO', 'Portal login successful.')
         self._backoff = config['tcc.backoff']
         log('DEBUG', 'Saving cookiejar: {0}'.format(config['exporter.cookiejar']))
@@ -70,7 +76,7 @@ class Client(object):
         self._backoff = config['tcc.backoff_limit']
       else:
         self._backoff = self._backoff * 2
-      if 'exceeded the maximum number of attempts' in decoded:
+      if (found == "Too Many Attempts"):
         log('WARNING', 'Portal said we have exceeded the maximum number of login attempts.')
         self._backoff = config['tcc.backoff_limit']
       log('INFO', 'Next login retry delayed {0} seconds.'.format(self._backoff))
